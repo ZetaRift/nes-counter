@@ -22,7 +22,8 @@
   .dw RESET
   .dw 0
 
-;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;; Sprite and palette data here
+
   .bank 2
   .org $0000
   .incbin "numbers.chr"
@@ -37,7 +38,8 @@ sprites:
 
   .bank 0
   .org $C000
-;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;; NMI handler
 
 NMI:
   pha
@@ -77,6 +79,8 @@ dmatransfer: ; Copy the sprite attributes to the PPU OAM (Object Attribute Memor
   tax
   pla
   rti
+
+;;;;;;;;;;;;;;;; Reset routine
 
 RESET: ; Ensure that PPU is ready first to limit the logic to 60 runs per second
   sei ; Ignore IRQ
@@ -160,6 +164,8 @@ loadspritesloop:
   lda #%00010000 ; enable sprites
   sta $2001
 
+;;;;;;;;;;;;;;;; Put our initial sprites on the screen, this will update on the next vblank
+
 ;;;;;;;;;;;;;;;; Sprite 1
   lda #$80 ; Sprite positioned on center of screen
   sta $0203 ; Screen X
@@ -185,7 +191,7 @@ loadspritesloop:
   sta $0209
   sta $020A
 
-;;;;;;;;;;;;;;;; Main loop
+;;;;;;;;;;;;;;;; Main program loop
 main:
   inc $0000
 vblankend:
