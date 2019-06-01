@@ -12,10 +12,10 @@
 ; $0208-$020B: Sprite 3 (Y pos, sprite index, sprite attribute, X pos)
 ; $0701 Reset count, reset persistient
 ; Assemble with NESASM
-  .inesmir 1
-  .inesmap 0
-  .inesprg 1
-  .ineschr 1
+  .inesmir 0
+  .inesmap 0 ; NROM
+  .inesprg 1 ; 8K PRG
+  .ineschr 1 ; 8K CHR
   .bank 1
   .org $FFFA
   .dw NMI
