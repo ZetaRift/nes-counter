@@ -14,7 +14,7 @@
 ; Assemble with NESASM
   .inesmir 0
   .inesmap 0 ; NROM
-  .inesprg 1 ; 8K PRG
+  .inesprg 1 ; 16K PRG
   .ineschr 1 ; 8K CHR
   .bank 1
   .org $FFFA
@@ -208,15 +208,8 @@ vblankend:
   beq resetall
   ldx $0001
   
-  cpx #60 ; Change to 50 if on PAL
-  bcs secinc
-  ldx $0004
-  cpx #10
-  bcs teninc
-  
-  ldx $0003
-  cpx #10
-  bcs hundinc
+  cpx #59 ; Change to 50 if on PAL
+  bcs countup
   
   ldx $0001
   inx
@@ -232,27 +225,31 @@ resetall: ; Resets counters including frame counter
   stx $0003
   stx $0004
   jmp loopend
-secinc:
-  ldx #$00
+
+countup:
+  ldx #00
   stx $0001
+
+secinc:
   ldx $0004
+  cpx #$09
+  bcs teninc
   inx
   stx $0004
   jmp loopend
+
 teninc:
   ldx #$00
-  stx $0001
-  ldx #$00
   stx $0004
+
   ldx $0003
+  cpx #$09
+  bcs hundinc
   inx
   stx $0003
   jmp loopend
   
 hundinc:
-  ldx #$00
-  stx $0001
-  
   ldx #00 ; Zero out second and tenth second
   stx $0004
   stx $0003
