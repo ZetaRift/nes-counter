@@ -1,26 +1,58 @@
 ; A counter that actually shows something on the screen
 ; The counter is timed by the PPU's vblank so the loop is run through 60 times per second (On NTSC)
-; Variable references:
-; $0000 Sleep timer
-; $0001 Frame timer (Resets after 3C, or 60)
-; $0002 Hundredth counter
-; $0003 Tenth counter
-; $0004 Second counter
-; $0011-$0018 Controller button state (A, B, Select, Start, Up, Down, Left, Right)
-; $0200-$0203: Sprite 1 (Y pos, sprite index, sprite attribute, X pos)
-; $0204-$0207: Sprite 2 (Y pos, sprite index, sprite attribute, X pos)
-; $0208-$020B: Sprite 3 (Y pos, sprite index, sprite attribute, X pos)
-; $0701 Reset count, reset persistient
 ; Assemble with NESASM
+
+;;;;;;;;;;;;;;;;; Variable assignment here
+; $0000 Sleep timer, the main program loop won't run if this isn't zero, each PPU vblank zeroes this out
+
+frametimer = $0001 ; Frame timer
+hundred = $0002 ; Hundredth counter
+ten = $0003 ; Tenth counter
+second = $0004 ; Second counter
+tenth = $0005
+Joy1_buttons = $0010 ; Controller #1 Button state (A(MSB), B, Select, Start, Up, Down, Left, Right(LSB))
+pressed_buttons1 = $0011
+released_buttons1 = $0012
+last_frame_buttons1 = $0013
+movedelta = $0018 ; Sprite movement delta (XY per frame)
+movedeltamin = $0019 ; 
+sprite1ypos = $0200 ; Sprite 1 Y position 
+sprite1index = $0201 ; Sprite 1 index
+sprite1attr = $0202 ; Sprite 1 attributes
+sprite1xpos = $0203 ; Sprite 1 X position
+
+sprite2ypos = $0204 ; Sprite 2 Y position
+sprite2index = $0205 ; Sprite 2 index
+sprite2attr = $0206 ; Sprite 2 attributes
+sprite2xpos = $0207 ; Sprite 2 X position
+
+sprite3ypos = $0208 ; Sprite 3 Y position
+sprite3index = $0209 ; Sprite 3 index
+sprite3attr = $020A ; Sprite 3 attributes
+sprite3xpos = $020B ; Sprite 3 X position
+
+rstcount = $0701 ; Reset count, reset persistient 
+
+BUTTON_A      = 1 << 7
+BUTTON_B      = 1 << 6
+BUTTON_SELECT = 1 << 5
+BUTTON_START  = 1 << 4
+BUTTON_UP     = 1 << 3
+BUTTON_DOWN   = 1 << 2
+BUTTON_LEFT   = 1 << 1
+BUTTON_RIGHT  = 1 << 0
+
+Joy1 = $4016 ; Joystick #1
+
   .inesmir 0
   .inesmap 0 ; NROM
   .inesprg 1 ; 16K PRG
   .ineschr 1 ; 8K CHR
   .bank 1
   .org $FFFA
-  .dw NMI
-  .dw RESET
-  .dw 0
+  .dw NMI ; Non maskable interrupt vector
+  .dw RESET ; Reset vector
+  .dw 0 ; IRQ vector, we don't need an IRQ handler
 
 ;;;;;;;;;;;;;;;; Sprite and palette data here
 
@@ -50,20 +82,16 @@ NMI:
   ; From here on out until rti, we can do things to the PPU while in its vblank state
 
 updatesprites: ; Update the sprite attributes before DMA transfer
-  lda $0004 ; Hundredth number
-  sta $0209
-  lda $0011
-  sta $020A
-  
-  lda $0003 ; Tenth number
-  sta $0205
-  lda $0011
-  sta $0206
 
-  lda $0002 ; Second number
-  sta $0201
-  lda $0011
-  sta $0202
+  lda second ; Second number
+  sta sprite3index
+  
+  lda ten ; Tenth number
+  sta sprite2index
+
+  lda hundred ; Hundredth number
+  sta sprite1index
+
 
 dmatransfer: ; Copy the sprite attributes from RAM to the PPU OAM (Object Attribute Memory)
   lda #$00
@@ -73,6 +101,7 @@ dmatransfer: ; Copy the sprite attributes from RAM to the PPU OAM (Object Attrib
 
   lda #$0
   sta $0000
+
   pla
   tay
   pla
@@ -87,9 +116,9 @@ RESET: ; Ensure that PPU is ready first to limit the logic to 60 runs per second
   cld ; Decimal mode disable
   lda #$40
   stx $4017; APU frame IRQ disable
-  ldx $701 ; N of resets, reset persistent
+  ldx rstcount ; N of resets, reset persistent
   inx
-  stx $701
+  stx rstcount
   ldx #$FF
   txs ; Stack setup
   inx ; Zeroed out
@@ -117,22 +146,22 @@ memclear:
   inx
   bne memclear
   lda #%10000000
-  sta $0004
+  sta second
 
 vblank2:
   bit $2002
   bpl vblank2
   ldx #$00
   
-  stx $0002 ; Or else the program breaks
-  stx $0003
-  stx $0004
+  stx hundred ; Or else the program breaks
+  stx ten
+  stx second
   
   lda $2002
   lda #$3F
   sta $2006
   lda #$10
-  sta $2006
+  sta $2006 ; Access PPU memory at $3F10
   ldx #$00
 
 loadpalettes:
@@ -140,7 +169,7 @@ loadpalettes:
   lda #$3F
   sta $2006
   lda #$00
-  sta $2006
+  sta $2006 ; PPU memory #3F00
   ldx #$00
 loadpalettesloop:
   lda PaletteData, x
@@ -169,248 +198,230 @@ loadspritesloop:
 
 ;;;;;;;;;;;;;;;; Sprite 1
   lda #$80 ; Sprite positioned on center of screen
-  sta $0203 ; Screen X
-  sta $0200 ; Screen Y
+  sta sprite1xpos ; Screen X
+  sta sprite1ypos ; Screen Y
   lda #$00 ; Loads sprite referencing variable
-  sta $0201
-  sta $0202
+  sta sprite1index
+  sta sprite1attr
 ;;;;;;;;;;;;;;;; Sprite 2
   lda #$88 
-  sta $0207 ; Screen X
+  sta sprite2xpos ; Screen X
   lda #$80
-  sta $0204 ; Screen Y
+  sta sprite2ypos ; Screen Y
   lda #$00
-  sta $0205
-  sta $0206
+  sta sprite2index
+  sta sprite2attr
 
 ;;;;;;;;;;;;;;;; Sprite 3
   lda #$90
-  sta $020B ; Screen X
+  sta sprite3xpos ; Screen X
   lda #$80
-  sta $0208 ; Screen Y
+  sta sprite3ypos ; Screen Y
   lda #$00
-  sta $0209
-  sta $020A
+  sta sprite3index
+  sta sprite3attr
 
+  lda #$01
+  sta movedelta
 ;;;;;;;;;;;;;;;; Main program loop
 main:
   inc $0000
 vblankend:
   lda $0000
-  bne vblankend
+  bne vblankend ; Loop back to vblankend until after a PPU vblank
+
+
   lda #$00
-  sta $0011
-  sta $0012
-  sta $0013
-  sta $0014
-  sta $0015
-  sta $0016
-  sta $0017
-  sta $0018
-  jsr contcheck
-  lda $0011
-  cmp #$01
-  beq resetall
-  ldx $0001
+  sta Joy1_buttons
+  jsr rstattr
+  jsr readjoy
+  lda Joy1_buttons
+  and #BUTTON_A
+  bne resetall
+
+  ldx frametimer
   
   cpx #59 ; Change to 49 if on PAL
   bcs countup
-  
-  ldx $0001
   inx
-  stx $0001
+  stx frametimer
   jmp loopend
 loopend:
-  jmp main
+  jmp movesprites
   
+rstattr:
+  sta sprite1attr
+  sta sprite2attr
+  sta sprite3attr
+  rts
+
 resetall: ; Resets counters including frame counter
   ldx #$00
-  stx $0001
-  stx $0002
-  stx $0003
-  stx $0004
+  stx frametimer
+  stx hundred
+  stx ten
+  stx second
+  lda #$01
+  sta sprite1attr
+  sta sprite2attr
+  sta sprite3attr
   jmp loopend
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Increment counter variables
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 countup:
   ldx #00
-  stx $0001
+  stx frametimer
 
 secinc:
-  ldx $0004
+  ldx second
   cpx #$09
   bcs teninc
   inx
-  stx $0004
+  stx second
   jmp loopend
 
 teninc:
   ldx #$00
-  stx $0004
+  stx second
 
-  ldx $0003
+  ldx ten
   cpx #$09
   bcs hundinc
   inx
-  stx $0003
+  stx ten
   jmp loopend
   
 hundinc:
   ldx #00 ; Zero out second and tenth second
-  stx $0004
-  stx $0003
+  stx second
+  stx ten
 
-  ldx $0002
+  ldx hundred
   cpx #09 ; We want to reset back to zero if we get past 9
   beq resetcounter
   inx
-  stx $0002
+  stx hundred
 
   jmp loopend
 
 resetcounter: ; Resets counters
   ldx #$00
-  stx $0002
-  stx $0003
-  stx $0004
+  stx hundred
+  stx ten
+  stx second
   jmp loopend
 
-contcheck: ; Subroutine to check for controller button states sequentially, seems to be the most reliable so far
-  lda #$01 ; Strobe the controller so we can poll for pressed/released states
+movesprites:
+  jmp movespritesfar
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Joystick button check routine, now using a ring counter
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+readjoy:
+  lda #$01
+  ; While the strobe bit is set, buttons will be continuously reloaded.
+ ; This means that reading from JOYPAD1 will only return the state of the
+  ; first button: button A.
   sta $4016
-  lda #$00
-  sta $4016 ; Avoiding a jsr + rts chain to save a few cycles
-
-ReadA:
+  sta Joy1_buttons
+  lsr a        ; now A is 0
+  ; By storing 0 into JOYPAD1, the strobe bit is cleared and the reloading stops.
+  ; This allows all 8 buttons (newly reloaded) to be read from JOYPAD1.
+  sta $4016
+loop:
   lda $4016
-  and #%00000001 ; A button
-  bne apressed
-
-ReadB:
-  lda $4016 ; B
-  and #%00000001
-  bne bpressed
-
-ReadSel:
-  lda $4016 ; Select
-  and #%00000001
-  bne selpressed
-
-ReadSta:
-  lda $4016 ; Start
-  and #%00000001
-  bne stapressed
-
-ReadUp:
-  lda $4016 ; Up
-  and #%00000001
-  bne uppressed
-
-ReadDn
-  lda $4016 ; Down
-  and #%00000001
-  bne dwnpressed
-
-ReadLt:
-  lda $4016 ; Left
-  and #%00000001
-  bne ltpressed
-
-ReadRt:
-  lda $4016 ; Right
-  and #%00000001
-  bne rtpressed
-
+  lsr a	       ; bit 0 -> Carry
+  rol Joy1_buttons  ; Carry -> bit 0; bit 7 -> Carry
+  bcc loop
   rts
-apressed:
-  lda #$01
-  sta $0011
-  jmp ReadB
 
-bpressed:
-  lda #$01
-  sta $0012
-  jmp ReadSel
+movespritesfar:
 
-selpressed:
-  lda #$01
-  sta $0013
-  jmp ReadSta
+  lda Joy1_buttons
+  and #BUTTON_UP
+  bne spritesup
+dnchk:
+  lda Joy1_buttons
+  and #BUTTON_DOWN
+  bne spritesdown
+ltchk:
+  lda Joy1_buttons
+  and #BUTTON_LEFT
+  bne spritesleft
+rtchk:
+  lda Joy1_buttons
+  and #BUTTON_RIGHT
+  bne spritesright
+  jmp main
 
-stapressed:
-  lda #$01
-  sta $0014
-  jmp ReadUp
+spritesup:
+  sec
+  lda sprite1ypos
+  sbc movedelta
+  sta sprite1ypos
 
-uppressed:
-  lda #$01
-  sta $0015
+  sec
+  lda sprite2ypos
+  sbc movedelta
+  sta sprite2ypos
 
-  ; Move our numbers up
-  ldx $0200
-  dex
-  stx $0200
+  sec
+  lda sprite3ypos
+  sbc movedelta
+  sta sprite3ypos
+  cld
+  jmp dnchk
 
-  ldx $0204
-  dex
-  stx $0204
+spritesdown:
+  clc
+  lda sprite1ypos
+  adc movedelta
+  sta sprite1ypos
 
-  ldx $0208
-  dex
-  stx $0208
+  clc
+  lda sprite2ypos
+  adc movedelta
+  sta sprite2ypos
 
-  jmp ReadDn
+  clc
+  lda sprite3ypos
+  adc movedelta
+  sta sprite3ypos
+  jmp ltchk
 
-dwnpressed:
-  lda #$01
-  sta $0016
+spritesleft:
 
-  ; Move our numbers down
-  ldx $0200
-  inx
-  stx $0200
+  sec
+  lda sprite1xpos
+  sbc movedelta
+  sta sprite1xpos
 
-  ldx $0204
-  inx
-  stx $0204
+  sec
+  lda sprite2xpos
+  sbc movedelta
+  sta sprite2xpos
 
-  ldx $0208
-  inx
-  stx $0208
+  sec
+  lda sprite3xpos
+  sbc movedelta
+  sta sprite3xpos
+  cld
+  jmp rtchk
 
-  jmp ReadLt
+spritesright:
+  clc
+  lda sprite1xpos
+  adc movedelta
+  sta sprite1xpos
 
-ltpressed:
-  lda #$01
-  sta $0017
+  clc
+  lda sprite2xpos
+  adc movedelta
+  sta sprite2xpos
 
-  ; Move our numbers left
-  ldx $0203
-  dex
-  stx $0203
-
-  ldx $0207
-  dex
-  stx $0207
-
-  ldx $020B
-  dex
-  stx $020B
-  jmp ReadRt
-
-rtpressed:
-  lda #$01
-  sta $0018
-
-    ; Move our numbers right
-  ldx $0203
-  inx
-  stx $0203
-
-  ldx $0207
-  inx
-  stx $0207
-
-  ldx $020B
-  inx
-  stx $020B
-  rts
+  clc
+  lda sprite3xpos
+  adc movedelta
+  sta sprite3xpos
+  jmp main
