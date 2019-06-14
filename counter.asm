@@ -12,7 +12,6 @@ second = $0004 ; Second counter
 tenth = $0005
 Joy1_buttons = $0010 ; Controller #1 Button state (A(MSB), B, Select, Start, Up, Down, Left, Right(LSB))
 movedelta = $0018 ; Sprite movement delta (XY per frame)
-movedeltamin = $0019 ; 
 sprite1ypos = $0200 ; Sprite 1 Y position 
 sprite1index = $0201 ; Sprite 1 index
 sprite1attr = $0202 ; Sprite 1 attributes
