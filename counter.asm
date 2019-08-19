@@ -12,6 +12,8 @@ second = $0004 ; Second counter
 tenth = $0005
 Joy1_buttons = $0010 ; Controller #1 Button state (A(MSB), B, Select, Start, Up, Down, Left, Right(LSB))
 movedelta = $0018 ; Sprite movement delta (XY per frame)
+movedelay = $0019 ; Move delay per frame
+moveframe = $001A ; Move delay frame counter (for comparsion)
 sprite1ypos = $0200 ; Sprite 1 Y position 
 sprite1index = $0201 ; Sprite 1 index
 sprite1attr = $0202 ; Sprite 1 attributes
@@ -29,14 +31,14 @@ sprite3xpos = $020B ; Sprite 3 X position
 
 rstcount = $0701 ; Reset count, reset persistient 
 
-BUTTON_A      = 1 << 7
-BUTTON_B      = 1 << 6
-BUTTON_SELECT = 1 << 5
-BUTTON_START  = 1 << 4
-BUTTON_UP     = 1 << 3
-BUTTON_DOWN   = 1 << 2
-BUTTON_LEFT   = 1 << 1
-BUTTON_RIGHT  = 1 << 0
+BUTTON_A      = 1 << 7 ; $80
+BUTTON_B      = 1 << 6 ; $40
+BUTTON_SELECT = 1 << 5 ; $20
+BUTTON_START  = 1 << 4 ; $10
+BUTTON_UP     = 1 << 3 ; $08
+BUTTON_DOWN   = 1 << 2 ; $04
+BUTTON_LEFT   = 1 << 1 ; $02
+BUTTON_RIGHT  = 1 << 0 ; $01
 
 Joy1 = $4016 ; Joystick #1
 
@@ -231,10 +233,15 @@ vblankend:
   sta Joy1_buttons
   jsr rstattr
   jsr readjoy
+  ldx moveframe
+  cpx movedelay
+  bcs movesprites
+  inx
+  stx moveframe
+spritesdone: ; Just to treat movesprites as if it were a subroutine since doing an rts from a far away section of the program can cause problems
   lda Joy1_buttons
   and #BUTTON_A
   bne resetall
-
   ldx frametimer
   
   cpx #59 ; Change to 49 if on PAL
@@ -243,7 +250,7 @@ vblankend:
   stx frametimer
   jmp loopend
 loopend:
-  jmp movesprites
+  jmp main
   
 rstattr:
   sta sprite1attr
@@ -278,6 +285,9 @@ secinc:
   stx second
   jmp loopend
 
+movesprites:
+  jmp movespritesfar
+
 teninc:
   ldx #$00
   stx second
@@ -308,9 +318,6 @@ resetcounter: ; Resets counters
   stx ten
   stx second
   jmp loopend
-
-movesprites:
-  jmp movespritesfar
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Joystick button check routine, now using a ring counter
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -332,8 +339,13 @@ loop:
   bcc loop
   rts
 
-movespritesfar:
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Check button states and move sprites as needed
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+movespritesfar:
+  ldx #$00
+  stx moveframe
   lda Joy1_buttons
   and #BUTTON_UP
   bne spritesup
@@ -349,7 +361,7 @@ rtchk:
   lda Joy1_buttons
   and #BUTTON_RIGHT
   bne spritesright
-  jmp main
+  jmp spritesdone
 
 spritesup:
   sec
@@ -420,4 +432,4 @@ spritesright:
   lda sprite3xpos
   adc movedelta
   sta sprite3xpos
-  jmp main
+  jmp spritesdone
